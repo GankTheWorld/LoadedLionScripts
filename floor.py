@@ -108,18 +108,21 @@ print(f"Getting the cheapest {LIONS_TO_FETCH} lions:")
 
 skip_multi = 0
 
-while lion_count != LIONS_TO_FETCH:
+while True:
     for asset in get_assets(lowest_price - 1, skip_multi * 10):
         lion_name = asset["name"]
         asset_id = asset["id"]
         edition_id = asset["defaultListing"]["editionId"]
         auction_data = get_auction_data(edition_id)
         end_time, price = parse_auction_data(auction_data)
-
+        
+        
         # check if it is buy it now
         if end_time is not None:
             continue
-
+            
         print(f"{lion_name.ljust(18, ' ')} Price: ${price}")
         lion_count += 1
+        if lion_count == LIONS_TO_FETCH:
+          exit()
     skip_multi += 1
