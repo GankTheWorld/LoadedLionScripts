@@ -1,12 +1,9 @@
 """
 Gets the floor price for #LoadedLions as well as a configurable amount of the cheapest lions marked as 'Buy now'
 """
-
-import datetime as dt
 from decimal import Decimal
 from time import sleep
 
-import pytz
 import requests
 
 URL = "https://crypto.com/nft-api/graphql"
@@ -63,45 +60,6 @@ def get_assets(min_price: int, skip=0):
     return assets
 
 
-def get_auction_data(edition_id: str):
-    r = requests.post(
-        URL,
-        json={
-            "operationName": "getEditionByAssetId",
-            "variables": {
-                "editionId": edition_id,
-                "cacheId": f"getEditionById-{edition_id}-undefined-undefined",
-            },
-            "query": "query getEditionByAssetId($editionId: ID, $assetId: ID, $editionIndex: Int, $cacheId: ID) {\n  public(cacheId: $cacheId) {\n    edition(id: $editionId, assetId: $assetId, editionIndex: $editionIndex) {\n      id\n      index\n      listing {\n        id\n        price\n        currency\n        primary\n        auctionCloseAt\n        auctionHasBids\n        auctionMinPriceDecimal\n        priceDecimal\n        mode\n        isCancellable\n        status\n        __typename\n      }\n      primaryListing {\n        id\n        price\n        currency\n        primary\n        auctionCloseAt\n        auctionHasBids\n        auctionMinPriceDecimal\n        priceDecimal\n        mode\n        isCancellable\n        status\n        __typename\n      }\n      owner {\n        uuid\n        id\n        username\n        displayName\n        avatar {\n          url\n          __typename\n        }\n        croWalletAddress\n        isCreator\n        __typename\n      }\n      ownership {\n        primary\n        __typename\n      }\n      chainMintStatus\n      chainTransferStatus\n      chainWithdrawStatus\n      acceptedOffer {\n        id\n        user {\n          id\n          __typename\n        }\n        __typename\n      }\n      minOfferAmountDecimal\n      mintTime\n      __typename\n    }\n    __typename\n  }\n}\n",
-        },
-    )
-    auction_data = r.json()["data"]["public"]["edition"]
-    sleep(0.1)
-    return auction_data
-
-
-def is_auction_cancellable(auction_data):
-    return auction_data["listing"]["isCancellable"]
-
-
-def _get_price(auction_data):
-    cur_price = auction_data["listing"]["price"]
-    return Decimal(cur_price / 100)
-
-
-def _get_end_time(auction_data):
-    try:
-        end_time = auction_data["listing"]["auctionCloseAt"].split(".")[0]
-        end_time = dt.datetime.strptime(end_time, "%Y-%m-%dT%H:%M:%S")
-        return pytz.utc.localize(end_time)
-    except AttributeError:
-        return None
-
-
-def parse_auction_data(auction_data):
-    return _get_end_time(auction_data), _get_price(auction_data)
-
-
 lowest_price = get_floor_price()
 print(f"Floor price is currently ${lowest_price}\n")
 print(f"Getting the cheapest {LIONS_TO_FETCH} lions:")
@@ -112,17 +70,19 @@ while True:
     for asset in get_assets(lowest_price - 1, skip_multi * 10):
         lion_name = asset["name"]
         asset_id = asset["id"]
-        edition_id = asset["defaultListing"]["editionId"]
-        auction_data = get_auction_data(edition_id)
-        end_time, price = parse_auction_data(auction_data)
-        
+
+        default_listing = asset["defaultListing"]
+        edition_id = default_listing["editionId"]
+        mode_sale = (default_listing["mode"] == "sale")
+        price = default_listing["priceDecimal"]
         
         # check if it is buy it now
-        if end_time is not None:
+        if not mode_sale:
             continue
             
-        print(f"{lion_name.ljust(18, ' ')} Price: ${price}")
+        print(f"{lion_count + 1} - {lion_name.ljust(18, ' ')} Price: ${price}")
         lion_count += 1
         if lion_count == LIONS_TO_FETCH:
           exit()
+    sleep(0.1)
     skip_multi += 1
